@@ -1,0 +1,206 @@
+﻿@model SecurityAnalyzer.ViewModels.SecurityAnalysisViewModel
+
+@{
+    ViewData["Title"] = "Анализ безопасности";
+}
+
+<h1>Анализ безопасности по IP</h1>
+
+<form asp-action="Index" method="post">
+    <div>
+        <label for="ipAddress">IP-адрес:</label>
+        <input type="text" id="ipAddress" name="ipAddress" value="@Model.IpAddress" />
+        @Html.ValidationMessage("IpAddress", new { @style = "color:red" })
+    </div>
+    <div style="margin-top:10px;">
+        <button type="submit">Анализировать</button>
+    </div>
+</form>
+
+@if (!string.IsNullOrWhiteSpace(Model.IpAddress))
+{
+    <hr />
+    <h2>Результаты для @Model.IpAddress</h2>
+
+    @* Статус узла *@
+    @if (!string.IsNullOrWhiteSpace(Model.HostStatusMessage))
+    {
+        <p><strong>Статус узла:</strong> @Model.HostStatusMessage</p>
+    }
+
+    @* Если узел недоступен — показываем только порты и выходим *@
+    @if (!Model.HostReachable)
+    {
+        <h3>Проверенные порты</h3>
+        @if (Model.Ports.Any())
+        {
+            <table border="1" cellpadding="5" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>Порт</th>
+                        <th>Протокол</th>
+                        <th>Статус</th>
+                        <th>Риск</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var p in Model.Ports)
+                {
+                    <tr>
+                        <td>@p.Port</td>
+                        <td>@p.Protocol</td>
+                        <td>@p.Status</td>
+                        <td>@p.Risk</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p>Порты не проверялись.</p>
+        }
+
+        @* дальше ничего не показываем *@
+        return;
+    }
+
+    @* БЛОК МЕТРИК — вот чего у тебя нет *@
+    <h3>Индексы безопасности</h3>
+    <ul>
+        <li>Индекс портов: @Model.PortIndex</li>
+        <li>Индекс уязвимостей (HTTP-конфигурация): @Model.VulnerabilityIndex</li>
+        <li>Индекс инцидентов: @Model.IncidentIndex</li>
+        <li><strong>Итоговый индекс:</strong> @Model.Score</li>
+    </ul>
+
+    <p><strong>Экспертное заключение:</strong> @Model.Conclusion</p>
+
+    <h3>Ключевые уязвимости</h3>
+    @if (Model.TopVulnerabilities.Any())
+    {
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Критичность</th>
+                    <th>Баллы</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var v in Model.TopVulnerabilities)
+            {
+                <tr>
+                    <td>@v.Name</td>
+                    <td>@v.Severity</td>
+                    <td>@v.Score</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>Критичных уязвимостей в HTTP-конфигурации не обнаружено.</p>
+    }
+
+    <h3>Ключевые инциденты</h3>
+    @if (Model.TopIncidents.Any())
+    {
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Тип</th>
+                    <th>Количество</th>
+                    <th>Риск</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var i in Model.TopIncidents)
+            {
+                <tr>
+                    <td>@i.Type</td>
+                    <td>@i.Count</td>
+                    <td>@i.Risk</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>Инциденты не зафиксированы (синтетические данные для данного IP).</p>
+    }
+
+    <h3>Порты</h3>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Порт</th>
+                <th>Протокол</th>
+                <th>Статус</th>
+                <th>Риск</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var p in Model.Ports)
+        {
+            <tr>
+                <td>@p.Port</td>
+                <td>@p.Protocol</td>
+                <td>@p.Status</td>
+                <td>@p.Risk</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <h3>Все уязвимости (HTTP-заголовки и HTTPS)</h3>
+    @if (Model.Vulnerabilities.Any())
+    {
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Критичность</th>
+                    <th>Баллы</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var v in Model.Vulnerabilities)
+            {
+                <tr>
+                    <td>@v.Name</td>
+                    <td>@v.Severity</td>
+                    <td>@v.Score</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>Уязвимости в HTTP-конфигурации не обнаружены.</p>
+    }
+
+    <h3>Все инциденты (синтетический профиль)</h3>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Тип</th>
+                <th>Количество</th>
+                <th>Риск</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var i in Model.Incidents)
+        {
+            <tr>
+                <td>@i.Type</td>
+                <td>@i.Count</td>
+                <td>@i.Risk</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
