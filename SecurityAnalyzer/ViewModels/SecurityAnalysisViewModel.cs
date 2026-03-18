@@ -17,7 +17,11 @@ public sealed class SecurityAnalysisViewModel
     public double Score { get; set; }
 
     public string Conclusion { get; set; } = "";
-
+    //@@
+    public string PortConclusion { get; set; } = string.Empty;
+    public string VulnerabilityConclusion { get; set; } = string.Empty;
+    public string IncidentConclusion { get; set; } = string.Empty;
+    //
     public List<VulnerabilityInfo> TopVulnerabilities { get; set; } = [];
     public List<IncidentInfo> TopIncidents { get; set; } = [];
     

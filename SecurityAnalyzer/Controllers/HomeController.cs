@@ -45,15 +45,27 @@ public class HomeController(SecurityAnalyzerService analyzer) : Controller
             out var sp,
             out var sv,
             out var si);
-
-        vm.Vulnerabilities = vulns;
-        vm.Incidents = incidents;
+        //@@ сортировку
+        vm.Vulnerabilities = vulns
+            .OrderByDescending(v => v.Score)
+            .ToList();
+        //@@
+        vm.Incidents = incidents
+            .Where(i => i.Count > 0)
+            .OrderByDescending(i => i.Risk * i.Count)
+            .ToList();
         vm.PortIndex = sp;
         vm.VulnerabilityIndex = sv;
         vm.IncidentIndex = si;
         vm.Score = score;
         vm.Conclusion = analyzer.GetConclusion(score);
         vm.HostStatusMessage = "Узел доступен. Анализ выполнен.";
+        //@@
+        vm.PortConclusion = analyzer.GetPortConclusion(ports);
+        vm.VulnerabilityConclusion = analyzer.GetVulnerabilityConclusion(vulns);
+        vm.IncidentConclusion = analyzer.GetIncidentConclusion(incidents);
+        //
+
         vm.TopVulnerabilities = vulns
             .OrderByDescending(v => v.Score)
             .Take(3)

@@ -120,21 +120,56 @@ public sealed class SecurityAnalyzerService
             }
         }
 
-        AddIfMissing("Strict-Transport-Security",
-            "Отсутствует Strict-Transport-Security (HSTS)",
-            "High", 8);
+        //@@
+        if (httpsAvailable)
+        {
+            AddIfMissing("Strict-Transport-Security",
+                "Отсутствует Strict-Transport-Security (HSTS)",
+                "High", 7);
+        }
 
         AddIfMissing("X-Content-Type-Options",
             "Отсутствует X-Content-Type-Options",
-            "Medium", 5);
+            "Medium", 4);
 
         AddIfMissing("X-Frame-Options",
             "Отсутствует X-Frame-Options",
-            "Medium", 4);
+            "Medium", 3);
 
         AddIfMissing("Content-Security-Policy",
             "Отсутствует Content-Security-Policy",
             "High", 9);
+
+        //@@
+        AddIfMissing("Referrer-Policy",
+            "Отсутствует Referrer-Policy",
+            "Medium", 3);
+
+        AddIfMissing("Permissions-Policy",
+            "Отсутствует Permissions-Policy",
+            "Low", 2);
+
+        AddIfMissing("Cross-Origin-Opener-Policy",
+            "Отсутствует Cross-Origin-Opener-Policy",
+            "Low", 2);
+
+        AddIfMissing("Cross-Origin-Resource-Policy",
+            "Отсутствует Cross-Origin-Resource-Policy",
+            "Low", 2);
+
+        AddIfMissing("X-Permitted-Cross-Domain-Policies",
+            "Отсутствует X-Permitted-Cross-Domain-Policies",
+            "Low", 1);
+        
+        if (headers.Contains("X-Powered-By"))
+        {
+            result.Add(new VulnerabilityInfo
+            {
+                Name = "Сервер раскрывает заголовок X-Powered-By",
+                Severity = "Low",
+                Score = 1
+            });
+        }//
 
         if (!httpsAvailable)
         {
@@ -144,6 +179,38 @@ public sealed class SecurityAnalyzerService
                 Severity = "High",
                 Score = 7
             });
+        }
+        //@@
+        if (httpsAvailable)
+        {
+            using var httpNoRedirect = new HttpClient(new HttpClientHandler
+            {
+                AllowAutoRedirect = false
+            })
+            {
+                Timeout = TimeSpan.FromSeconds(3)
+            };
+
+            var httpResp = await httpNoRedirect.GetAsync(urlHttp);
+
+            var isRedirectStatus =
+                (int)httpResp.StatusCode >= 300 &&
+                (int)httpResp.StatusCode < 400;
+
+            var redirectToHttps =
+                isRedirectStatus &&
+                httpResp.Headers.Location != null &&
+                httpResp.Headers.Location.Scheme == Uri.UriSchemeHttps;
+
+            if (!redirectToHttps)
+            {
+                result.Add(new VulnerabilityInfo
+                {
+                    Name = "HTTP доступен без принудительного редиректа на HTTPS",
+                    Severity = "Medium",
+                    Score = 5
+                });
+            }
         }
 
         return result;
@@ -174,6 +241,30 @@ public sealed class SecurityAnalyzerService
                 Type = "Блокированные подключения",
                 Count = rnd.Next(0, 12),
                 Risk = 1
+            },
+            new()
+            {
+                Type = "Частые ошибки авторизации",
+                Count = rnd.Next(0, 9),
+                Risk = 3
+            },
+            new()
+            {
+                Type = "Подозрительные обращения к административным путям",
+                Count = rnd.Next(0, 6),
+                Risk = 5
+            },
+            new()
+            {
+                Type = "Аномальная активность по запросам",
+                Count = rnd.Next(0, 7),
+                Risk = 3
+            },
+            new()
+            {
+                Type = "Подозрительные внешние подключения",
+                Count = rnd.Next(0, 5),
+                Risk = 4
             }
         };
     }
@@ -258,5 +349,57 @@ public sealed class SecurityAnalyzerService
         if (score >= 60)
             return "Средний уровень безопасности. Требуется аудит конфигурации и устранение выявленных уязвимостей.";
         return "Низкий уровень безопасности. Рекомендуется пересмотр сетевой архитектуры и настроек веб-сервиса, а также анализ инцидентов.";
+    }
+    //@@
+    public string GetPortConclusion(List<PortInfo> ports)
+    {
+        var hasOpenAdminPorts = ports.Any(p =>
+            p.Status == "Open" && (p.Port == 22 || p.Port == 3389));
+
+        var hasOpenWebPorts = ports.Any(p =>
+            p.Status == "Open" && (p.Port == 80 || p.Port == 443 || p.Port == 8080));
+
+        if (hasOpenAdminPorts)
+            return "Обнаружены открытые административные порты. Рекомендуется ограничить доступ к ним по VPN или по доверенным IP-адресам.";
+
+        if (hasOpenWebPorts)
+            return "Открыты только веб-порты, опасные административные порты не обнаружены.";
+
+        return "Открытые порты не обнаружены среди анализируемых сервисов.";
+    }
+
+    public string GetVulnerabilityConclusion(List<VulnerabilityInfo> vulns)
+    {
+        if (!vulns.Any())
+            return "Критичных проблем в HTTP/HTTPS-конфигурации не выявлено.";
+
+        var hasCspProblem = vulns.Any(v => v.Name.Contains("Content-Security-Policy"));
+        var hasHttpsRedirectProblem = vulns.Any(v => v.Name.Contains("редиректа на HTTPS"));
+        var vulnCount = vulns.Count;
+
+        if (hasCspProblem || hasHttpsRedirectProblem)
+            return "Выявлены значимые проблемы веб-конфигурации. Рекомендуется настроить защитные заголовки и принудительный переход на HTTPS.";
+
+        if (vulnCount >= 3)
+            return "Выявлено несколько недостатков в настройке защитных HTTP-заголовков. Рекомендуется усилить конфигурацию веб-сервиса.";
+
+        return "Обнаружены отдельные недостатки защитной конфигурации HTTP/HTTPS.";
+    }
+
+    public string GetIncidentConclusion(List<IncidentInfo> incidents)
+    {
+        if (!incidents.Any())
+            return "Инциденты не зафиксированы.";
+
+        var maxRiskValue = incidents.Max(i => i.Risk * i.Count);
+        var hasAdminPathActivity = incidents.Any(i => i.Type.Contains("административным путям"));
+
+        if (hasAdminPathActivity)
+            return "Синтетический профиль указывает на повышенную подозрительную активность, включая обращения к административным путям.";
+
+        if (maxRiskValue >= 20)
+            return "Синтетический профиль инцидентов указывает на повышенную подозрительную активность. Рекомендуется дополнительный анализ журналов доступа.";
+
+        return "Синтетический профиль инцидентов указывает на умеренный уровень подозрительной активности.";
     }
 }
